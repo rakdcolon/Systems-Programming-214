@@ -1,2 +1,10 @@
-# Systems-Programming-214
-Notes and projects from Systems Programming 198:214 taught by David Menendez
+***
+# Systems Programming (01:198:214)
+# Rutgers University-New Brunswick
+# Professor David Menendez
+***
+
+## What's in this Repository?
+- Lecture Notes
+- Projects
+- Files
