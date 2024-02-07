@@ -1,17 +1,10 @@
----
-tags:
-  - CS
-  - Systems
-  - Lecture
-date: 2024-01-17
----
 ***
 # Systems Programming
 # Professor David Menendez
 # Lecture 1: C Introduction and Review
 ***
 ## Programming with C
-- First two weeks will be a review on C
+- First two weeks will be a review of C
 - Memory Management
 - Interfaces with the operating system
 - Reference Compiler is GCC 9.3 - installed on the iLab
