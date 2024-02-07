@@ -1,10 +1,3 @@
----
-tags:
-  - CS
-  - Systems
-  - Lecture
-date: 2024-01-24
----
 ***
 # Systems Programming
 # Professor David Menendez
