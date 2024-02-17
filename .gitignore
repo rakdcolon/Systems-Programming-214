@@ -1,3 +1,4 @@
 .vscode
 Projects/My Little Malloc/writeup.pdf
 Projects/My Little Malloc/test.c
+.gitignore
