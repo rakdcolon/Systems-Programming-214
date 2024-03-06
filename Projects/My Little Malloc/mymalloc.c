@@ -16,7 +16,7 @@ void *mymalloc(size_t size, char *FILE, int line) {
 
     // If any of the parameters are wrong, then halt the program
     if (size <= 0 || !FILE || line <= 0) { 
-        fprintf(stderr, "Error in %p on line %d: Invalid Size", FILE, line);
+        fprintf(stderr, "\nError in %p on line %d: Invalid Size\n", FILE, line);
         return NULL; // Here I am returning a NULL pointer, instead of an error similar to how real malloc works.
     }
 
@@ -61,7 +61,7 @@ void *mymalloc(size_t size, char *FILE, int line) {
     }
 
     // If could not find a suitable location, then show error and return a NULL pointer to the USER
-    fprintf(stderr, "Error in %p on line %d: Not Enough Space", FILE, line);
+    fprintf(stderr, "\nError in %p on line %d: Not Enough Space\n", FILE, line);
     return NULL;
 
 }
@@ -85,7 +85,7 @@ void myfree(void *ptr, char *FILE, int line) {
 
             if (IS_CURR_FREE) {  // If it is already freed, then return an error for attempting to free an already free object
 
-                fprintf(stderr, "Error in %p on line %d: Invalid Free", FILE, line);
+                fprintf(stderr, "\nError in %p on line %d: Invalid Free\n", FILE, line);
                 return;
 
             } else {
@@ -110,7 +110,7 @@ void myfree(void *ptr, char *FILE, int line) {
     }
 
     // If no memory was found in the entire list, then return an error to the USER for invalid pointer
-    fprintf(stderr, "Error in %p on line %d: Invalid Pointer", FILE, line);
+    fprintf(stderr, "\nError in %p on line %d: Invalid Pointer\n", FILE, line);
     return;
 
 }
