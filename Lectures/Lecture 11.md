@@ -1,0 +1,101 @@
+***
+# Systems Programming
+# Professor David Menendez
+# Lecture 11: Files and File System
+***
+### Producer / Consumer
+- Producer:
+	- Reads file and generates data items (e.g., lines)
+- Consumer:
+	- Receives items and uses them in some way
+- Control passes back and forth between producer and consumer
+- Both producer and consumer might need to store some state
+- How do we organize code like this?
+	- Everything in one function
+		- All the state can be in local variables
+		- Function is more complicated (doing two separate things)
+		- Can lead to code duplication
+			- Might consume in different places
+			- Might want to do different things
+	- Producer-driven (enumerator)
+		- Primary loop(s) focus on getting the next data item
+			- Call a function to receive the item
+	- Consumer-driven (iterator)
+		- Primary loop is the consumer
+			- Calls a function to get the next item
+	- Multithreading
+		- Run producer and consumer in separate threads
+		- Send data through shared data structures
+		- Both more and less complicated
+- Two approaches to managing memory: persistent and ephemeral
+	- When the data items are objects like strings, we have to consider when they get deallocated and what code is responsible
+- Persistent approach:
+	- Producer allocates a fresh object for each item
+	- Ownership is transferred to consumer
+		- Consumer must (eventually) deallocate the object
+- Ephemeral approach
+	- Producer allocates memory for items
+	- Item is only valid for a short time (until the next item is produced)
+	- Producer will deallocate the object
+		- If the consumer wants to hang onto an item, it must make a copy
+- The persistent approach requires an allocation for each item, the ephemeral approach does not
+- Persistent Approach is easy to understand, not so much for the ephemeral approach
+- All these approaches have merit, choose the one that fits your program and mind
+
+### File System
+- How do we refer to files?
+- At the user level, we refer to files by path name
+	- `/path/to/some/file`
+	- A path name identifies a single file
+- The file system refers to files by number (i-node identifier)
+	- i-node: "index node" (probably)
+- An i-node is a block on the storage device that stores information about a file
+- The file contents are stored in data blocks
+	- The data blocks making up a file are not contiguous
+		- The i-node needs to indicate which data blocks the file uses
+- Some requirements:
+	- Quick access to every part of the file
+	- Able to represent large files (millions of blocks)
+	- Efficiently represent small files
+	- All i-nodes are the same size (needed for efficient look-up)
+- Unix approach
+	- inode contains some number of direct references (e.g., 10 blocks)
+	- "Single indirect" block refers to a data block containing block references (e.g., 100 block references)
+	- "Double indirect" block refers to a data block referring to single indirect blocks (e.g., 10,000 block references)
+	- "Triple indirect" block refers to a data block referring to double indirect references (e.g., 1,000,000 block references)
+- What else is stored in the i-node?
+	- Type
+	- Timestamps (created, modified, accessed)
+	- Owner and group names
+	- Mode (permissions)
+	- Size of the file (in bytes and blocks)
+- One notable omission: file name
+- The file's name is implied by the directory structure
+- A directory is a special file containing a list of directory entries each having (at least)
+	- A name (local)
+	- An i-node ID
+- When we look up `/foo/bar/baz`
+	- 1. Open directory file for / (always in a known location)
+	- 2. Look for entry labeled `foo`, get inode id (X)
+	- 3. Open directory file X
+	- 4. Look for entry labeled `bar`, get inode id (Y)
+	- 5. Open directory file Y
+	- 6. Look for entry labeled `baz`, get inode id (Z)
+- Implication: files can easily have more than one name. In fact, the inode tracks how many files a name has
+- We can use `ln` to make new names for existing files
+	- `ln <existing file> <new name>`
+- When we remove a file, we unlink its name
+	- This reduces the number of names that a file has
+	- Files are deleted when they have no names and no program has them open
+- A directory entry is known as a "hard link"
+	- Connects a name to an ID
+
+### Symbolic Link
+- A symbolic ink is a special file that contains a path
+- Normally, opening a symbolic link will open the path instead
+	- `ln -s <existing file> <new name>`
+- Symbolic links point to a name, not a file
+	- They can break if the file is deleted or renamed
+		- We can change which file the link points to by renaming them
+- You can make symbolic links to directories
+- You can't (normally) make new names for directories
