@@ -25,5 +25,6 @@ HashSet* loadDictionary(char* filename);
 void checkFile(HashSet* dictionary, char* filename);
 void checkDirectory(HashSet* dictionary, char* dirname);
 void checkWord(HashSet* dictionary, char* word, int line, int column, char* filename);
+int isInHashSet(HashSet* set, char* word);
 
 #endif 
