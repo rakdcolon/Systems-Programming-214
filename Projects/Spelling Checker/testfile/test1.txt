@@ -1,0 +1,17 @@
+apple
+Banana
+cat-dog
+Elephant-Fish
+GRAPE
+HOUSE-ICE
+jaguar-Kangaroo
+LEMON
+MONKEY
+nurse-Orange
+PENGUIN
+rabbit-Snake
+TIGER
+umbrella-Vase
+WHALE
+xylophone-Yacht
+ZEBRA

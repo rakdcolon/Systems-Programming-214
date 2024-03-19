@@ -1,0 +1,14 @@
+ApPle
+BaNana
+cat-DOG
+Elephant-fish
+GRape
+house-ICE
+JAGUAR-kangaroo
+lemon-MONKEY
+Nurse-orange
+penguin-RABBIT
+snake-TIGER
+umbrella-VASE
+whale-XYLOPHONE
+yacht-ZEBRA

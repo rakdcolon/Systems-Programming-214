@@ -7,19 +7,18 @@ void toLowerCase(char* str) {
 }
 
 int isCapitalizedCorrectly(const char* word) {
-    if (!word || !*word) // Check if the word is empty or NULL
+    if (!word || !*word) 
         return 0;
 
     int allLower = 1;
     int allUpper = 1;
     int firstUpper = 0;
 
-    // Check each character in the word
     for (const char *ptr = word; *ptr != '\0'; ptr++) {
 
-        if (islower(*ptr)) // Check if character is lower case
+        if (islower(*ptr)) 
             allUpper = 0;
-        else if (isupper(*ptr)) { // Check if character is upper case
+        else if (isupper(*ptr)) { 
             allLower = 0;
             if (ptr == word)
                 firstUpper = 1;
@@ -28,32 +27,50 @@ int isCapitalizedCorrectly(const char* word) {
         }
     }
 
-    // Check the conditions for correct capitalization
     return allLower || allUpper || firstUpper;
 }
 
 void checkWord(HashSet* dictionary, char* word, int line, int column, char* filename) {
-    char* lowerCaseWord = strdup(word);
-    toLowerCase(lowerCaseWord);
 
-    if (!isInHashSet(dictionary, lowerCaseWord) && !isCapitalizedCorrectly(word)) {
-        if (isCapitalizedCorrectly(word)) {
-            printf("%s:%d:%d: %s is not in the dictionary\n", filename, line, column, word);
-        } else {
-            printf("%s:%d:%d: %s is not capitalized correctly\n", filename, line, column, word);
-        }
+    while (strlen(word) > 0 && ispunct((unsigned char)word[strlen(word) - 1])) {
+        word[strlen(word) - 1] = '\0';
     }
 
-    free(lowerCaseWord);
+    while (strlen(word) > 0 && (word[0] == '\'' || word[0] == '\"' || word[0] == '(' || word[0] == '[' || word[0] == '{')) {
+        memmove(word, word + 1, strlen(word));
+    }
+
+    char* copy = strdup(word);
+    char* saveptr;
+    char* part = strtok_r(copy, "-", &saveptr);
+
+    while (part != NULL) {
+        char* lowerCasePart = strdup(part);
+        toLowerCase(lowerCasePart);
+
+        if (!isInHashSet(dictionary, lowerCasePart)) {
+            if (isCapitalizedCorrectly(part)) {
+                printf("%s:%d:%d: %s is not in the dictionary\n", filename, line, column, word);
+            } else {
+                printf("%s:%d:%d: %s is not capitalized correctly\n", filename, line, column, word);
+            }
+        } else if (!isCapitalizedCorrectly(part)) {
+            printf("%s:%d:%d: %s is not capitalized correctly\n", filename, line, column, word);
+        }
+
+        free(lowerCasePart);
+        part = strtok_r(NULL, "-", &saveptr);
+    }
+
+    free(copy);
+    
 }
 
 unsigned int hash(char* str) {
     unsigned int hash = 5381;
     int c;
 
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
+    while ((c = *str++)) hash = ((hash << 5) + hash) + c;
     return hash;
 }
 
@@ -94,7 +111,7 @@ HashSet* createHashSet(int capacity) {
         printf("Could not allocate memory for hash set");
         exit(EXIT_FAILURE);
     }
-
+    
     set->table = malloc(sizeof(char*) * capacity);
     if (set->table == NULL) {
         printf("Could not allocate memory for hash set table");
@@ -112,6 +129,8 @@ HashSet* createHashSet(int capacity) {
 }
 
 void checkDirectory(HashSet* dictionary, char* dirname) {
+    printf("Checking directory: %s\n", dirname);
+
     DIR* dir = opendir(dirname);
     if (dir == NULL) {
         // If it's not a directory, check if it's a file
@@ -145,9 +164,11 @@ void checkDirectory(HashSet* dictionary, char* dirname) {
     }
 
     closedir(dir);
+    printf("\n");
 }
 
 void checkFile(HashSet* dictionary, char* filename) {
+    printf("Checking file: %s\n", filename);
 
     int fd = open(filename, O_RDONLY);
     if (fd == -1) {
@@ -198,6 +219,7 @@ void checkFile(HashSet* dictionary, char* filename) {
     }
 
     close(fd);
+    printf("\n");
 }
 
 HashSet* loadDictionary(char* filename) {
