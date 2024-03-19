@@ -1,5 +1,6 @@
 #ifndef header
 #define header
+#define _DEFAULT_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,14 +14,12 @@
 #define MAX_WORD_LENGTH 100
 #define BUFFER_SIZE 4096
 
-// Define the HashSet data structure
 typedef struct {
     char** table;
     int size;
     int capacity;
 } HashSet;
 
-// Function prototypes
 HashSet* loadDictionary(char* filename);
 void checkFile(HashSet* dictionary, char* filename);
 void checkDirectory(HashSet* dictionary, char* dirname);

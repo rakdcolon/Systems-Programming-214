@@ -1,8 +1,5 @@
 .vscode
-Projects/My Little Malloc/writeup.pdf
-Projects/My Little Malloc/test.c
 *.o
-memtest_executable
-Projects/My Little Malloc/memtest.c
-Projects/My Little Malloc/memgrind.c
+*.dSYM
+spchk
 .gitignore

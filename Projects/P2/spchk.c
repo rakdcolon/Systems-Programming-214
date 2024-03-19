@@ -111,7 +111,7 @@ HashSet* createHashSet(int capacity) {
         printf("Could not allocate memory for hash set");
         exit(EXIT_FAILURE);
     }
-    
+
     set->table = malloc(sizeof(char*) * capacity);
     if (set->table == NULL) {
         printf("Could not allocate memory for hash set table");
@@ -133,7 +133,6 @@ void checkDirectory(HashSet* dictionary, char* dirname) {
 
     DIR* dir = opendir(dirname);
     if (dir == NULL) {
-        // If it's not a directory, check if it's a file
         if (access(dirname, F_OK) == 0) {
             checkFile(dictionary, dirname);
             return;
@@ -204,7 +203,6 @@ void checkFile(HashSet* dictionary, char* filename) {
             }
         }
 
-        // Check the last word in the buffer
         if (wordIndex > 0) {
             word[wordIndex] = '\0';
             printf("Checking word: %s\n", word);
