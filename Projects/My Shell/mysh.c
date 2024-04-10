@@ -1,194 +1,573 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
-#include <dirent.h>
+#include <getopt.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <errno.h>
 #include <fcntl.h>
-#include <fnmatch.h>
+#include <string.h>
+#include <signal.h>
+#include <glob.h>
 
-#define MAX_LINE 80
+#define MYSH_LINE 1024
 
-void parse_input(char* input, char** args) {
-    char* token = strtok(input, " \n");
-    int i = 0;
-    while (token != NULL) {
-        args[i++] = token;
-        token = strtok(NULL, " \n");
-    }
-    args[i] = NULL;
+typedef struct Node{
+	char* data;
+	struct Node* next;
+} Node;
+
+typedef struct CmdSet
+{
+    struct Cmd **commands;
+    int background;
+    int numCmds;
+} *cmdset;
+
+typedef struct Cmd
+{
+    char **args;
+    char *inputFile;
+    char *outputFile;
+    int n;
+    int appendOut;
+    int pipeInput;
+    int pipeOutput;
+} *cmd;
+
+typedef struct FreeNode
+{
+    struct FreeNode *nextFree;
+    pid_t process_id;
+} *FreeNode;
+
+char **get_tokens(const char *line)
+{
+    char **tokens = NULL;
+    char *lineCopy;
+    const char *delimiter = " \t\n";
+    char *currentToken;
+    int n = 0;
+
+    tokens = (char **)malloc(sizeof(char *));
+    tokens[0] = NULL;
+
+    if (line == NULL) return tokens;
+
+    lineCopy = strdup(line);
+    currentToken = strtok(lineCopy, delimiter);
+
+    if (currentToken == NULL) return tokens;
+
+    do {
+        n++;
+        tokens = (char **)realloc(tokens, (n + 1) * sizeof(char *));
+        tokens[n - 1] = strdup(currentToken);
+        tokens[n] = NULL;
+    } while ((currentToken = strtok(NULL, delimiter)));
+
+    free(lineCopy);
+
+    return tokens;
 }
 
-void expand_wildcard(char* pattern, char** args, int* num_args) {
-    char* slash = strrchr(pattern, '/');
-    char* directory;
-    char* file_pattern;
+void free_tokens(char **tokens)
+{
+    if (tokens == NULL) return;
 
-    if (slash != NULL) {
-        *slash = '\0';
-        directory = pattern;
-        file_pattern = slash + 1;
-    } else {
-        directory = ".";
-        file_pattern = pattern;
+    for (int i = 0; tokens[i]; i++) { free(tokens[i]); }
+
+    free(tokens);
+}
+
+FreeNode head;
+
+void insert_node(FreeNode n)
+{
+    FreeNode temp = head;
+    n->nextFree = 0;
+    if (head == 0)
+    {
+        head = n;
+        return;
     }
+    else
+    {
+        if (n < head)
+        {
+            n->nextFree = head;
+            head = n;
+            return;
+        }
 
-    DIR* dir = opendir(directory);
-    if (dir == NULL) {
-        perror("opendir");
+        while (temp->nextFree != 0)
+        {
+            if (n < temp->nextFree)
+            {
+                n->nextFree = temp->nextFree;
+                temp->nextFree = n;
+                return;
+            }
+            temp = temp->nextFree;
+        }
+        temp->nextFree = n;
+        return;
+    }
+}
+
+void expandWildCards(char* args, Node* ptr, int* numArg){
+    glob_t pglob;
+    if (glob(args, GLOB_NOCHECK | GLOB_TILDE, NULL, &pglob) == 0) {
+        for (int i = 0; i < pglob.gl_pathc; i++) {
+            ptr->data = strdup(pglob.gl_pathv[i]);
+            (*numArg)++;
+            if (i < pglob.gl_pathc - 1) { // Check if not last element
+                ptr-> next = (Node*)malloc(sizeof(Node));
+                ptr = ptr->next;
+            } else {
+                ptr->next = NULL; // Set the next of the last node to NULL
+            }
+        }
+    }
+    globfree(&pglob);
+}
+
+void remove_node(pid_t n)
+{
+
+    if (head->process_id == n)
+    {
+        head = head->nextFree;
         return;
     }
 
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (file_pattern[0] != '.' && entry->d_name[0] == '.') {
-            continue;
+    FreeNode temp = head;
+    while (temp->nextFree != 0)
+    {
+        if (temp->nextFree->process_id == n)
+        {
+            temp->nextFree = temp->nextFree->nextFree;
+            return;
         }
-        if (fnmatch(file_pattern, entry->d_name, 0) == 0) {
-            args[(*num_args)++] = strdup(entry->d_name);
-        }
+        temp = temp->nextFree;
     }
-
-    closedir(dir);
+    return;
 }
 
-int execute_command(char** args1, char** args2, char* input_file, char* output_file, int piping) {
-    int pipefd[2];
-    pid_t pid1, pid2 = -1;
+int main(int argc, char *argv[])
+{
+    int init = 0;
+    while (1)
+    {
 
-    if (piping && pipe(pipefd) == -1) {
-        perror("pipe");
-        return 1;
-    }
-
-    pid1 = fork();
-    if (pid1 == -1) {
-        perror("fork");
-        return 1;
-    }
-
-    if (pid1 == 0) {
-        if (input_file != NULL) {
-            int fd = open(input_file, O_RDONLY);
-            if (fd == -1) {
-                perror("open");
-                exit(1);
+        int error = 0;
+        if (argc == 2)
+        {
+            if (!strcmp(argv[1], "-"))
+            {
+                fprintf(stdout, "");
             }
-            dup2(fd, STDIN_FILENO);
-            close(fd);
+            else
+            {
+                fprintf(stdout, "%s ", argv[1]);
+            }
+        }
+        else if (argc == 1)
+        {
+            if (init == 0)
+            {
+                fprintf(stdout, "Welcome to my shell!\n");
+            }
+            init = 1;
+            fprintf(stdout, "mysh> ");
+        }
+        else
+        {
+            fprintf(stderr, "Error: Usage: %s [prompt]\n", argv[0]);
+            exit(-1);
         }
 
-        if (piping && output_file == NULL) {
-            close(pipefd[0]);
-            dup2(pipefd[1], STDOUT_FILENO);
-            close(pipefd[1]);
-        } else if (output_file != NULL) {
-            int fd = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-            if (fd == -1) {
-                perror("open");
-                exit(1);
-            }
-            dup2(fd, STDOUT_FILENO);
-            close(fd);
+        char *lineBuffer = malloc(sizeof(char) * (MYSH_LINE));
+        if (!lineBuffer)
+        {
+            fprintf(stderr, "Error: Out of memory\n");
+            exit(-1);
         }
 
-        execv(args1[0], args1);
-        perror("execv");
-        exit(1);
-    }
-
-    if (piping) {
-        close(pipefd[1]);
-
-        pid2 = fork();
-        if (pid2 == -1) {
-            perror("fork");
-            return 1;
-        }
-
-        if (pid2 == 0) {
-            if (input_file == NULL) {
-                dup2(pipefd[0], STDIN_FILENO);
-            }
-            close(pipefd[0]);
-
-            if (output_file != NULL) {
-                int fd = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-                if (fd == -1) {
-                    perror("open");
-                    exit(1);
+        char *result;
+        errno = 0;
+        do
+        {
+            result = fgets(lineBuffer, MYSH_LINE, stdin);
+        } while ((result == NULL) && (errno == EINTR));
+        if ((!result) || (strcmp(lineBuffer, "exit\n") == 0))
+        {
+            pid_t kill_id;
+            int status;
+            fprintf(stdout, "mysh: exiting\n");
+            do {
+                kill_id = wait3(&status, WNOHANG, NULL);
+                if (kill_id > 0)
+                {
+                    kill(kill_id, SIGTERM);
                 }
-                dup2(fd, STDOUT_FILENO);
-                close(fd);
+            } while (kill_id != -1);
+            return 0;
+        }
+
+        cmdset commandSet = calloc(1, sizeof(struct CmdSet));
+        commandSet->numCmds = 1;
+        commandSet->commands = calloc(1, sizeof(char *) * (commandSet->numCmds + 1));
+        cmd command = calloc(1, sizeof(struct Cmd));
+        command->args = calloc(1, sizeof(char **));
+        commandSet->commands[0] = command;
+        commandSet->commands[1] = NULL;
+
+        char **breakup = get_tokens(lineBuffer);
+
+        for (int i = 0; breakup[i]; i++)
+        {
+            if (strchr(breakup[i], '*')) {  // If the argument contains a wildcard
+                glob_t glob_result;
+
+                switch (glob(breakup[i], GLOB_TILDE, NULL, &glob_result)) {
+                    case 0:  // Successful glob
+                        breakup[i] = NULL;  // Remove the wildcard pattern
+                        for (size_t j = 0; j < glob_result.gl_pathc; j++) {
+                            // Add each matching filename to the argument list
+                            breakup = realloc(breakup, (i + j + 2) * sizeof(char *));
+                            breakup[i + j] = strdup(glob_result.gl_pathv[j]);
+                        }
+                        breakup[i + glob_result.gl_pathc] = NULL;  // Null-terminate the argument list
+                        break;
+                    case GLOB_NOMATCH:  // No matches
+                        break;  // Leave the argument as is
+                    default:  // Some other error
+                        perror("glob");
+                        break;
+                }
+                globfree(&glob_result);
             }
 
-            execv(args2[0], args2);
-            perror("execv");
-            exit(1);
+            if (strcmp(breakup[0], "cd") == 0) {
+                if (breakup[1] == NULL) {
+                    fprintf(stderr, "cd: no argument provided\n");
+                    break;
+                }
+                if (chdir(breakup[1]) == -1) {
+                    perror("cd");
+                    break;
+                }
+                break;
+            }
+
+            if (strcmp(breakup[i], "&") == 0)
+            {
+                if (breakup[i + 1] != NULL)
+                {
+                    fprintf(stderr, "Error: \"&\" must be last token on command line\n");
+                    error = 1;
+                    break;
+                }
+                else
+                {
+                    commandSet->background = 1;
+                }
+            }
+            else if (strcmp(breakup[i], "<") == 0)
+            {
+                i++;
+                if (command->inputFile)
+                {
+                    fprintf(stderr, "Error: Ambiguous input redirection.\n");
+                    error = 1;
+                    break;
+                }
+                if (breakup[i])
+                {
+                    command->inputFile = breakup[i];
+                }
+                else
+                {
+                    fprintf(stderr, "Error: Missing filename for input redirection.\n");
+                    error = 1;
+                    break;
+                }
+            }
+            else if (strcmp(breakup[i], ">") == 0)
+            {
+                i++;
+                if (command->outputFile)
+                {
+                    fprintf(stderr, "Error: Ambiguous output redirection.\n");
+                    error = 1;
+                    break;
+                }
+                if (breakup[i])
+                {
+                    struct stat buf;
+                    int exists = lstat(breakup[i], &buf);
+                    if (exists >= 0)
+                    {
+                        fprintf(stderr, "Error: open(\"%s\"): File exists\n", breakup[i]);
+                        error = 1;
+                        break;
+                    }
+                    command->outputFile = breakup[i];
+                }
+                else
+                {
+                    fprintf(stderr, "Error: Missing filename for output redirection.\n");
+                    error = 1;
+                    break;
+                }
+            }
+            else if (strcmp(breakup[i], ">>") == 0)
+            {
+                i++;
+                if (command->outputFile)
+                {
+                    fprintf(stderr, "Error: Ambiguous output redirection.\n");
+                    error = 1;
+                    break;
+                }
+                if (breakup[i])
+                {
+                    command->outputFile = breakup[i];
+                    command->appendOut = 1;
+                }
+                else
+                {
+                    fprintf(stderr, "Error: Missing filename for output redirection.\n");
+                    error = 1;
+                    break;
+                }
+            }
+            else if (strcmp(breakup[i], "|") == 0)
+            {
+                if (!command->args)
+                {
+                    fprintf(stderr, "Error: Invalid null command.\n");
+                    error = 1;
+                    break;
+                }
+                commandSet->numCmds++;
+                commandSet->commands = realloc(commandSet->commands, sizeof(char *) * commandSet->numCmds + 1);
+                command->pipeOutput = 1;
+                cmd command2 = calloc(1, sizeof(struct Cmd));
+                command2->pipeInput = 1;
+                command2->args = calloc(1, sizeof(char **) * 2);
+                commandSet->commands[commandSet->numCmds - 1] = command2;
+                command = command2;
+                commandSet->commands[commandSet->numCmds] = NULL;
+            }
+            else
+            {
+                if (command->n == 0)
+                {
+                    command->args[0] = breakup[i];
+                    command->n++;
+                }
+                else
+                {
+                    command->n++;
+                    command->args = (char **)realloc(command->args, sizeof(char **) * (command->n + 1));
+                    command->args[command->n - 1] = breakup[i];
+                    command->args[command->n] = NULL;
+                }
+            }
         }
 
-        close(pipefd[0]);
-    }
-
-    int status;
-    waitpid(pid1, &status, 0);
-    if (piping) {
-        waitpid(pid2, &status, 0);
-    }
-
-    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
-}
-
-int main(int argc, char *argv[]) {
-    int should_run = 1;
-    int prev_exit_status = 0;
-
-    while (should_run) {
-        char input[MAX_LINE];
-        if (fgets(input, sizeof(input), stdin) == NULL) {
-            break;
+        for (int c = 0; commandSet->commands[c]; c++)
+        {
+            cmd command = commandSet->commands[c];
+            if (command->pipeOutput)
+            {
+                int pipefds[2] = {-1, -1};
+                if (!command->args[0])
+                {
+                    fprintf(stderr, "Error: Invalid null command.\n");
+                    error = 1;
+                    break;
+                }
+                else if (command->outputFile)
+                {
+                    fprintf(stderr, "Error: Ambiguous output redirection.\n");
+                    error = 1;
+                    break;
+                }
+                else
+                {
+                    if (pipe(pipefds) < 0)
+                    {
+                        perror("Error: Cannot create pipe()");
+                        error = 1;
+                        break;
+                    }
+                    command->pipeOutput = pipefds[1];
+                }
+                if (commandSet->commands[c + 1])
+                {
+                    if (!commandSet->commands[c + 1]->pipeInput)
+                    {
+                        fprintf(stderr, "Error: Destination not set to accept pipe.\n");
+                        error = 1;
+                        break;
+                    }
+                    else if (!commandSet->commands[c + 1]->args[0])
+                    {
+                        fprintf(stderr, "Error: Invalid null command.\n");
+                        error = 1;
+                        break;
+                    }
+                    else if (commandSet->commands[c + 1]->inputFile)
+                    {
+                        fprintf(stderr, "Error: Ambiguous input redirection.\n");
+                        error = 1;
+                        break;
+                    }
+                    else
+                    {
+                        commandSet->commands[c + 1]->pipeInput = pipefds[0];
+                    }
+                }
+                else
+                {
+                    fprintf(stderr, "Error: No destination for pipe.\n");
+                    error = 1;
+                    break;
+                }
+            }
         }
+        if (error)
+            continue;
+        int status;
+        pid_t process_id = 0;
 
-        char* args[MAX_LINE];
-        parse_input(input, args);
+        for (int c = 0; commandSet->commands[c]; c++)
+        {
+            cmd command = commandSet->commands[c];
+            pid_t pid = fork();
+            if (pid > 0)
+            {
+                if (command->pipeOutput) close(command->pipeOutput);
+                if (command->pipeInput) close(command->pipeInput);
 
-        char* args1[MAX_LINE];
-        char* args2[MAX_LINE];
-        char* input_file = NULL;
-        char* output_file = NULL;
-        int num_args1 = 0;
-        int num_args2 = 0;
-        int piping = 0;
+                if (!commandSet->background)
+                {
+                    FreeNode newNode = malloc(sizeof(struct FreeNode));
+                    newNode->process_id = pid;
+                    newNode->nextFree = NULL;
+                    insert_node(newNode);
+                }
+            }
+            else if (pid == 0)
+            {
+                if (execvp(command->args[0], command->args) == -1) {
+                    perror("Error executing command");
+                    exit(EXIT_FAILURE);
+                }
 
-        for (int i = 0; args[i] != NULL; i++) {
-            if (strcmp(args[i], "<") == 0) {
-                input_file = args[++i];
-            } else if (strcmp(args[i], ">") == 0) {
-                output_file = args[++i];
-            } else if (strcmp(args[i], "|") == 0) {
-                piping = 1;
-            } else if (strchr(args[i], '*') != NULL) {
-                expand_wildcard(args[i], args1, &num_args1);
-            } else if (piping) {
-                args2[num_args2++] = args[i];
+                if (command->inputFile)
+                {
+                    int fin = open(command->inputFile, O_RDONLY);
+                    if (fin == -1)
+                    {
+                        fprintf(stderr, "Error: open(\"%s\"): %s\n", command->inputFile, strerror(errno));
+                        exit(-1);
+                    }
+                    if (dup2(fin, 0) == -1)
+                    {
+                        perror("Error: dup2");
+                        exit(-1);
+                    }
+                    close(fin);
+                }
+                if (command->outputFile)
+                {
+                    int fout;
+                    if (command->appendOut)
+                    {
+                        fout = open(command->outputFile,
+                                    O_WRONLY | O_CREAT | O_APPEND,
+                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                    }
+                    else
+                    {
+                        fout = open(command->outputFile,
+                                    O_CREAT | O_WRONLY,
+                                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                    }
+                    if (fout == -1)
+                    {
+                        fprintf(stderr, "Error: open(\"%s\"): %s\n", command->outputFile, strerror(errno));
+                        exit(-1);
+                    }
+                    if (dup2(fout, 1) == -1)
+                    {
+                        perror("Error: dup2()");
+                        exit(-1);
+                    }
+                    close(fout);
+                }
+                if (command->pipeOutput)
+                {
+                    if (dup2(command->pipeOutput, STDOUT_FILENO) == -1)
+                    {
+                        fprintf(stderr, "Error: dup2 stdout, pipeOutput %d\n", command->pipeOutput);
+                        close(command->pipeOutput);
+                        exit(1);
+                    }
+                }
+                if (command->pipeInput)
+                {
+                    if (dup2(command->pipeInput, STDIN_FILENO) == -1)
+                    {
+                        fprintf(stderr, "Error: dup2 stdin, pipeInput %d\n", command->pipeInput);
+                        close(command->pipeInput);
+                        exit(1);
+                    }
+                }
+                int execresult;
+                do
+                {
+                    execresult = execvp(command->args[0], command->args);
+                } while (execresult == -1);
+                exit(EXIT_FAILURE);
             } else {
-                args1[num_args1++] = args[i];
+                fprintf(stderr, "Error: fork()\n");
+                exit(EXIT_FAILURE);
             }
         }
 
-        args1[num_args1] = NULL;
-        args2[num_args2] = NULL;
-
-        if (strcmp(args1[0], "then") == 0 && prev_exit_status != 0) {
-            continue;
+        while (head != NULL)
+        {
+            process_id = wait3(&status, WNOHANG, NULL);
+            if (process_id > 0)
+            {
+                remove_node(process_id);
+            }
+            else if (process_id == -1)
+            {
+                head = NULL;
+                break;
+            }
+            usleep(10000);
         }
 
-        if (strcmp(args1[0], "else") == 0 && prev_exit_status == 0) {
-            continue;
-        }
+        free(lineBuffer);
+        free_tokens(breakup);
 
-        prev_exit_status = execute_command(args1, args2, input_file, output_file, piping);
+        for (int i = 0; commandSet->commands[i]; i++)
+        {
+            command = commandSet->commands[i];
+            if (command->args)
+                free(command->args);
+            free(command);
+        }
+        free(commandSet);
     }
-
-    return 0;
 }

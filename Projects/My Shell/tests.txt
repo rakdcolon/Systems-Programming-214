@@ -1,0 +1,17 @@
+echo "Testing basic commands..."
+echo "ls" | ./mysh
+echo "pwd" | ./mysh
+echo "cd .." | ./mysh
+
+echo "Testing input/output redirection..."
+echo "echo Hello, world! > output.txt" | ./mysh
+echo "cat < output.txt" | ./mysh
+
+echo "Testing piping..."
+echo "ls | grep mysh" | ./mysh
+
+echo "Testing background processes..."
+echo "sleep 5 &" | ./mysh
+
+echo "Testing error handling..."
+echo "nonexistentcommand" | ./mysh
