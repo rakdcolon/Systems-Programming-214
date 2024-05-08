@@ -68,26 +68,13 @@ int main(int argc, char **argv)
         /*
         * 
         * TEST 3:
-        *  - malloc and free 120 characters but based on if the current index is prime or composite
+        *  - malloc and free varying sizes of data from 1 to 120. 
         * 
         */
         begin = clock();
-        int mallocCount = 0;
-        char *r[120];
-        while (mallocCount != 120)
-        {
-            if (isPrime(mallocCount))
-            { 
-                r[mallocCount] = malloc(1);
-            } else {
-                r[mallocCount] = malloc(1);
-            }
-            mallocCount++;
-        }
-        while (mallocCount != 0)
-        { 
-            free(r[mallocCount]);
-            mallocCount--;
+        for(int i = 1; i < 120; i++) {
+            int *p = malloc(i);
+            free(p);
         }
         end = clock();
         time_spent[2][count] += (double)(end - begin) / CLOCKS_PER_SEC;

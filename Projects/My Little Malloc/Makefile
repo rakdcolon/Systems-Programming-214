@@ -5,7 +5,9 @@ SRC = mymalloc.c memgrind.c
 
 TARGET = memgrind
 
-all: $(TARGET)
-
 $(TARGET): 
 	$(CC) -o $@ $(SRC) $(CFLAGS)
+
+clean:
+	rm -f $(TARGET)
+	rm -r $(TARGET).dSYM

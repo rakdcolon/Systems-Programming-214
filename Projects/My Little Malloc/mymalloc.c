@@ -73,6 +73,13 @@ void *mymalloc(size_t size, char *FILE, int line) {
  */
 void myfree(void *ptr, char *FILE, int line) {
 
+    int *END_OF_MEMORY = START_OF_MEMORY + (MEMORY_LENGTH_IN_BYTES / sizeof(int));
+
+    if (ptr == NULL || ptr < (void *)START_OF_MEMORY || ptr >= (void *)END_OF_MEMORY) {
+        fprintf(stderr, "\nError in %s on line %d: Invalid Pointer\n", FILE, line);
+        return;
+    }
+
     int numberOfBytes = 0;
 
     // Hold two pointers such that we can coalesce chunks as soon as they are freed
@@ -92,19 +99,46 @@ void myfree(void *ptr, char *FILE, int line) {
 
                 SET_CURR_FREE; // Make the object free
 
-                if ((numberOfBytes + (*curr)) < MEMORY_LENGTH_IN_BYTES && *(curr + (*curr / 4) + 1) == 0) { *curr += *(curr + (*curr / 4)); }
 
-                if (prev != curr && IS_PREV_FREE) { *prev += *curr; } // Coalesce chunks by pointing the previous chunk to the next available chunk
+                if (curr >= START_OF_MEMORY && curr < END_OF_MEMORY) {
+                    int blockSize = *curr / 4;
+                    if (blockSize < 0 || blockSize >= MEMORY_LENGTH_IN_BYTES) {
+                        fprintf(stderr, "\nError in %p on line %d: Out of bounds memory\n", FILE, line);
+                        return;
+                    }
+                    if ((numberOfBytes + (*curr)) < MEMORY_LENGTH_IN_BYTES) {
+                        int *nextBlock = curr + blockSize;
+                        if (nextBlock >= START_OF_MEMORY && nextBlock < END_OF_MEMORY && *nextBlock == 0) {
+                            *curr += *(curr + blockSize);
+                        }
+                    }
+                }
+
+                // if ((numberOfBytes + (*curr)) < MEMORY_LENGTH_IN_BYTES && *(curr + (*curr / 4) + 1) == 0) { *curr += *(curr + (*curr / 4)); }
+
+                if (prev != curr && IS_PREV_FREE) { 
+                    *prev += *curr; 
+                    curr = prev; // Update curr to point to the coalesced block
+                }
+                if (IS_NEXT_BLOCK_FREE) { 
+                    *curr += *(curr + (*curr / 4)); 
+                }
 
                 return;
 
             }
+
         } else {
 
             // If the memory was not found this iteration, shift both pointers to the right and the byte indicator
             prev = curr;
-            curr += *curr / 4;
-            numberOfBytes += *curr;
+            if (curr + *curr / 4 < END_OF_MEMORY) {
+                numberOfBytes += *curr;
+                curr += *curr / 4;
+            } else {
+                fprintf(stderr, "\nError in %p on line %d: Out of bounds memory\n", FILE, line);
+                return;
+            }
 
         }
     }

@@ -32,11 +32,11 @@ int main() {
 	 */
 	printf("\nTEST 2: BEGIN      [-    ]");
 	int *arr2[256];
-	for (int i = 0; i < 256; i++)
+	for (int i = 0; i < 512; i++)
 	{
-		arr2[i] = malloc(2);
+		arr2[i] = malloc(1);
 	}	
-	for (int i = 0; i < 256; i++)
+	for (int i = 0; i < 512; i++)
 	{
 		free(arr2[i]);
 	}
