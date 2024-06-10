@@ -121,10 +121,10 @@ void insert_node(FreeNode n)
 void expandWildCards(char* args, Node* ptr, int* numArg){
     glob_t pglob;
     if (glob(args, GLOB_NOCHECK | GLOB_TILDE, NULL, &pglob) == 0) {
-        for (int i = 0; i < pglob.gl_pathc; i++) {
+        for (int i = 0; i < (int)pglob.gl_pathc; i++) {
             ptr->data = strdup(pglob.gl_pathv[i]);
             (*numArg)++;
-            if (i < pglob.gl_pathc - 1) { // Check if not last element
+            if (i < (int)pglob.gl_pathc - 1) { // Check if not last element
                 ptr-> next = (Node*)malloc(sizeof(Node));
                 ptr = ptr->next;
             } else {
@@ -446,6 +446,7 @@ int main(int argc, char *argv[])
             continue;
         int status;
         pid_t process_id = 0;
+        int stdout_save;
 
         for (int c = 0; commandSet->commands[c]; c++)
         {
@@ -489,6 +490,7 @@ int main(int argc, char *argv[])
                 if (command->outputFile)
                 {
                     int fout;
+                    stdout_save = dup(STDOUT_FILENO);
                     if (command->appendOut)
                     {
                         fout = open(command->outputFile,
@@ -531,11 +533,25 @@ int main(int argc, char *argv[])
                         exit(1);
                     }
                 }
-                int execresult;
-                do
+                int execresult = execvp(command->args[0], command->args);
+                if (execresult == -1) {
+                    perror("Error executing command");
+                    exit(EXIT_FAILURE);
+                }
+                // do
+                // {
+                //     execresult = execvp(command->args[0], command->args);
+                // } while (execresult == -1);
+
+                if (dup2(stdout_save, STDOUT_FILENO) == -1)
                 {
-                    execresult = execvp(command->args[0], command->args);
-                } while (execresult == -1);
+                    perror("Error: Cannot restore standard output");
+                    error = 1;
+                    break;
+                }
+
+                close(stdout_save);
+
                 exit(EXIT_FAILURE);
             } else {
                 fprintf(stderr, "Error: fork()\n");

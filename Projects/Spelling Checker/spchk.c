@@ -6,31 +6,43 @@ void toLowerCase(char* str) {
     }
 }
 
-int isCapitalizedCorrectly(const char* word) {
-    if (!word || !*word) 
-        return 0;
+void printHashSet(HashSet* set) {
+    printf("HashSet size: %d\n", set->size);
+    printf("HashSet capacity: %d\n", set->capacity);
+    printf("HashSet contents:\n");
 
-    int allLower = 1;
-    int allUpper = 1;
-    int firstUpper = 0;
+    for (unsigned int i = 0; i < set->capacity; i++) {
+        if (set->table[i] != NULL) {
+            printf("%d: %s\n", i, set->table[i]);
+        }
+    }
+}
 
-    for (const char *ptr = word; *ptr != '\0'; ptr++) {
+int isValidCapitalization(char *word) {
 
-        if (islower(*ptr)) 
+    int len = strlen(word);
+    int allUpper = 1, allLower = 1, firstCap = 1;
+
+    for (int i = 0; i < len; i++) {
+        if (islower(word[i])) {
             allUpper = 0;
-        else if (isupper(*ptr)) { 
+            if (i != 0) {
+                firstCap = 0;
+            }
+        } else if (isupper(word[i])) {
             allLower = 0;
-            if (ptr == word)
-                firstUpper = 1;
-            else
-                firstUpper = 0;
+            if (i != 0) {
+                firstCap = 0;
+            }
         }
     }
 
-    return allLower || allUpper || firstUpper;
+    return allUpper || allLower || firstCap;
 }
 
 void checkWord(HashSet* dictionary, char* word, int line, int column, char* filename) {
+
+    
 
     while (strlen(word) > 0 && ispunct((unsigned char)word[strlen(word) - 1])) {
         word[strlen(word) - 1] = '\0';
@@ -45,20 +57,11 @@ void checkWord(HashSet* dictionary, char* word, int line, int column, char* file
     char* part = strtok_r(copy, "-", &saveptr);
 
     while (part != NULL) {
-        char* lowerCasePart = strdup(part);
-        toLowerCase(lowerCasePart);
-
-        if (!isInHashSet(dictionary, lowerCasePart)) {
-            if (isCapitalizedCorrectly(part)) {
-                printf("%s:%d:%d: %s is not in the dictionary\n", filename, line, column, word);
-            } else {
-                printf("%s:%d:%d: %s is not capitalized correctly\n", filename, line, column, word);
-            }
-        } else if (!isCapitalizedCorrectly(part)) {
-            printf("%s:%d:%d: %s is not capitalized correctly\n", filename, line, column, word);
+        
+        if (!isValidCapitalization(part) && !isInHashSet(dictionary, part)) {
+            printf("%s:%d:%d: %s is not in the dictionary\n", filename, line, column, word);
         }
 
-        free(lowerCasePart);
         part = strtok_r(NULL, "-", &saveptr);
     }
 
@@ -92,16 +95,21 @@ void addToHashSet(HashSet* set, char* word) {
 }
 
 int isInHashSet(HashSet* set, char* word) {
-    unsigned int index = hash(word) % set->capacity;
+    char* lowerCaseWord = strdup(word);
+    toLowerCase(lowerCaseWord);
+
+    unsigned int index = hash(lowerCaseWord) % set->capacity;
+    printf("Checking word: %s, Hash: %u, Index: %u\n", lowerCaseWord, hash(lowerCaseWord), index);
 
     while (set->table[index] != NULL) {
-        if (strcmp(set->table[index], word) == 0) {
+        if (strcmp(set->table[index], lowerCaseWord) == 0) {
             return 1;
         }
 
         index = (index + 1) % set->capacity;
     }
 
+    free(lowerCaseWord);
     return 0;
 }
 
@@ -277,6 +285,8 @@ int main(int argc, char** argv) {
             checkDirectory(dictionary, argv[i]);
         }
     }
+
+    printHashSet(dictionary);
 
     printf("\nSpelling check complete\nStatus: %s\n\n", status ? "FAILED" : "SUCCESSFUL");
 
